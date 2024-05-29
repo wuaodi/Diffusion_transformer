@@ -1,13 +1,14 @@
 """Transformer的encoder部分实现"""
 
 import torch
-import numpy
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
 # 构建输入输出的序列，将句子中的文字单词变成单词表的索引
 max_words_num = 8  # 单词表中单词的数量
 max_seq_len = 5  # 定义最大序列长度
+batch_size= 2
 src_len = torch.tensor([2, 4], dtype=torch.int32)  # 两个句子，第一个句子有2个单词，第二个句子有4个单词
 tgt_len = torch.tensor([4, 3], dtype=torch.int32)  # 两个句子，第一个句子有4个单词，第二个句子有3个单词
 # 单词索引构成的句子，单词表长度为8，0位置空出来用于padding，使用 0 padding为每个句子长度为max_seq_len，
@@ -54,3 +55,16 @@ tgt_embedding += pe_embedding_table.unsqueeze(0)
 
 # 构造encoder的masked self-attention
 # masked的shape：[batch_size, max_seq_len, max_seq_len]，值为1或者负无穷
+valid_position = [F.pad(torch.ones(L), (0, max_seq_len-L)) for L in src_len]
+valid_position = torch.stack(valid_position, dim=0)
+valid_position = torch.unsqueeze(valid_position, 2)
+valid_position_matrix = torch.bmm(valid_position, valid_position.transpose(1,2))  # 自己与自己的转置相乘
+invalid_position_matrix = 1 - valid_position_matrix
+mask_self_attention = invalid_position_matrix.to(torch.bool) # True代表这些位置需要mask
+# 随机一个score
+score = torch.randn(batch_size, max_seq_len, max_seq_len)
+# 根据socre和mask的位置得到相关性矩阵
+masked_score = score.masked_fill(mask_self_attention, -1e9)  # 不相关部分给一个很大的负值
+prob = F.softmax(masked_score, -1)  # 最后一个维度做softmax
+print(masked_score)
+print(prob)
